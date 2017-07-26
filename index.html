@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Edge Detection</title>
+	<style>
+	:focus {
+    	outline: none;
+	}
+	body {
+		padding: 0;
+		margin: 0;
+		font-family: Arial;
+		font-size: 15px;
+		--theme: #ff5722;
+		--themedark: #d23605;
+		color: #fff;
+	}
+	canvas {
+		background: #eee;
+		position: fixed;
+	}
+	#controls {
+		position: fixed;
+		bottom: 0;
+		background: rgba(0, 0, 0, .5);
+		width: 100%;
+		max-width: 400px;
+		height: 30%;
+		padding: 2px;
+		overflow-y: scroll;
+		display: flex;
+		align-items: center;
+		flex-direction: column;
+		float: right;
+	}
+	.btn {
+		border: none;
+		background: var(--theme);
+		padding: 5px;
+		font-size: 20px;
+		border-radius: 3px;
+		box-shadow: 0 3px 4px rgba(0, 0, 0, .3);
+		cursor: pointer;
+		transition: .3s;
+	}
+	.btn:focus {
+		background: var(--themedark);
+	}
+	.btn:hover {
+		box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+		background: var(--themedark);
+	}
+	.txt {
+		border: none;
+		background: none;
+		border-bottom: 2px solid var(--theme);
+		transition: .3s;
+	}
+	.txt:focus {
+		border: none;
+		border-bottom: 3px solid var(--themedark);
+	}
+	</style>
+	<meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+</head>
+<body>
+
+<canvas id="drop"></canvas>
+<div id="controls">
+	<div style="font-size: 20px; margin-top: 10px;">Edge Detection</div><br>
+	<div><button id="save" class="btn">save</button></div><br>
+	<div><label for="thres">Threshold:</label>&nbsp;<input pattern="\d" onchange="updateThres()" id="thres" class="txt" type="text" ></div><br>
+	<div><label for="fg">Foreground:</label>&nbsp;<input onchange="updateFG()" id="fg" class="txt" type="color" ></div><br>
+	<div><label for="bg">Background:</label>&nbsp;<input onchange="updateBG()" id="bg" class="txt" type="color" value="#ffffff" ></div>
+</div>
+
+<script>
+
+var inputThreshold = document.querySelector('#thres').value
+var inputFG = hexToRGB(document.querySelector('#fg').value)
+var inputBG = hexToRGB(document.querySelector('#bg').value)
+
+function updateThres() {
+	inputThreshold = Number(document.querySelector('#thres').value)
+}
+
+function hexToRGB(hex) {
+	hex = hex.substring(1)
+	hex = `0x${hex}`
+	return [(hex>>16)&255, (hex>>8)&255, hex&255]
+}
+
+function updateFG() {
+	inputFG = hexToRGB(document.querySelector('#fg').value.substring())
+}
+
+function updateBG() {
+	inputBG = hexToRGB(document.querySelector('#bg').value.substring())
+}
+
+var colouringBook = (function() {
+  var drop = document.querySelector("#drop");
+  var save = document.querySelector("#save");
+  var ctx = drop.getContext('2d');
+
+  /* These are to set the canvas to full width */
+  drop.height = window.innerHeight; 
+  drop.width = window.innerWidth;
+  var lineWidth = 5;
+
+  drop.addEventListener('dragover', preventDefault);
+  drop.addEventListener('dragenter', preventDefault);
+  drop.addEventListener('drop', handleDrop);
+
+  save.addEventListener('click', saveCanvas);
+
+  function preventDefault(e) {
+    if (e.preventDefault) {
+      e.preventDefault();
+    }
+    return false;
+  }
+
+  function handleDrop(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+
+    var file = e.dataTransfer.files[0];
+    var image = new Image();
+
+    var reader = new FileReader();
+    reader.readAsDataURL(file);
+
+    reader.onload = (function() {
+      return function(e)  {
+        image.src = e.target.result;
+      };
+    })();
+
+    image.onload = function() {   
+      ctx.drawImage(image, 0, 0);  
+      var originalData = ctx.getImageData(0, 0, drop.width, drop.height);
+      findEdges(originalData);
+    };
+  }
+
+  function findEdges(originalData) {
+    var output = ctx.createImageData(drop.width, drop.height);
+
+    var w = originalData.width, h = originalData.height;
+    var inputData = originalData.data;
+    var outputData = output.data;
+    var threshold = inputThreshold || 100;
+
+    // edge detection
+    for (var y = 0; y < h; y += 1) {
+      for (var x = 0; x < w; x += 1) {
+        var i = (y * w + x) * 4;
+
+        outputData[i] = inputData[i - w*4 - 4] +   inputData[i - w*4] + inputData[i - w*4 + 4] +
+                inputData[i - 4]       -   8*inputData[i]     + inputData[i + 4] +
+                inputData[i + w*4 - 4] +   inputData[i + w*4] + inputData[i + w*4 + 4];
+
+        if (outputData[i] > threshold)
+        {
+          outputData[i] = inputFG[0];
+          outputData[i+1] = inputFG[1];
+          outputData[i+2] = inputFG[2];
+        }
+        else
+        {
+          outputData[i] = inputBG[0];
+          outputData[i+1] = inputBG[1];
+          outputData[i+2] = inputBG[2];
+        }
+        outputData[i + 3] = 255; // alpha
+      }
+    }
+
+    // put the image data back after manipulation
+    ctx.putImageData(output, 0, 0);
+  }
+
+  function saveCanvas()  {
+    var img = drop.toDataURL("image/png");
+    save.href = img;
+    save.download = "edges.png";
+  }
+
+})();
+
+</script>
+
+</body>
+</html>
